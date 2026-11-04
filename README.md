@@ -5,21 +5,22 @@ AI Agent Builder + Workflow Automation Platform.
 Create AI agents with instructions and tools, run them in the background, and watch every
 model step and tool call stream in live.
 
-## Status: Milestone 1
+## Features
 
-| Feature | Status |
+| Area | What you get |
 |---|---|
-| Email/password auth (Supabase) | ✅ |
-| Personal workspace per user (multi-tenant schema, RLS on every table) | ✅ |
-| Agent CRUD (name, instructions, model, tools, max steps) | ✅ |
-| Tools: web fetch, HTTP request (custom API), Slack post, current time | ✅ |
-| SSRF protection for web/HTTP tools | ✅ |
-| Run engine (Gemini via Vercel AI SDK, multi-step tool calling) | ✅ |
-| Background runs via Inngest (fallback: `after()` without Inngest) | ✅ |
-| Live step-by-step logs (Supabase Realtime + polling fallback) | ✅ |
-| Dashboard: runs, success rate, token usage, monthly token budget | ✅ |
-| Workflows, multi-agent, human approval, schedules | Milestone 2 |
-| Memory / RAG, templates, analytics, teams UI | Milestone 3 |
+| **Agents** | Instructions, model (Gemini), tools, step limit. 5 ready-made templates. Version history with restore. |
+| **Tools** | Web fetch, HTTP request (custom APIs), Slack post, current time, long-term memory, knowledge-base search. SSRF protection on network tools. |
+| **Runs** | Background execution. Every model step and tool call is logged and streamed live. Token usage per run, with a monthly budget per workspace. |
+| **Workflows** | Chain agent steps, human-approval steps and conditions. Pass data between steps with `{{input}}`, `{{previous}}`, `{{step1}}`… |
+| **Triggers** | Manual, webhook (secret URL), schedule (hourly, daily or weekly), public API |
+| **Human-in-the-loop** | A workflow pauses at an approval step. Reviewers approve or reject from the run page or the Approvals inbox. |
+| **Memory** | Agents save facts with `save_memory`. Saved facts are added to every later run. You can view and delete them per agent. |
+| **Knowledge base** | Paste or upload text docs. They are split into chunks and searched with Postgres full-text search. |
+| **Analytics** | Runs per day, success rate, latency and tokens, overall and per agent |
+| **Teams** | Multiple workspaces per user, invite links with roles (admin, editor, viewer), workspace switcher |
+| **API** | Workspace API keys (stored only as SHA-256 hashes) and REST endpoints for agent and workflow runs |
+| **Security** | RLS on every table. Runs, usage, memories and docs are written only by the server. Token budgets can't be changed through the API. |
 
 ## Stack
 
@@ -30,10 +31,12 @@ Auth, Realtime) · Vercel AI SDK 5 + Google Gemini · Inngest · Vercel
 
 ### 1. Database
 
-Open Supabase Dashboard → **SQL Editor** → paste the whole of
-[`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) → **Run**.
+In Supabase Dashboard → **SQL Editor**, run each migration in order. Paste the whole file and
+click **Run**:
 
-Run it **before** anyone signs up: it adds the trigger that gives every new user a workspace.
+1. [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql). Run it **before**
+   anyone signs up: it adds the trigger that gives every new user a workspace.
+2. [`supabase/migrations/0002_workflows_memory_knowledge.sql`](supabase/migrations/0002_workflows_memory_knowledge.sql)
 
 ### 2. Auth settings
 
@@ -79,8 +82,36 @@ and set `INNGEST_DEV=1` in `.env.local`.
 3. Install the **Inngest** integration from the Vercel marketplace. It sets `INNGEST_EVENT_KEY`
    and `INNGEST_SIGNING_KEY` and syncs `/api/inngest`.
 4. Update Supabase **Site URL / Redirect URLs** to the Vercel URL.
+5. Optional: add `CRON_SECRET` (any random string). Vercel Cron then calls `/api/cron/tick`
+   once a day as a fallback scheduler when Inngest isn't installed. With Inngest, schedules are
+   checked every 10 minutes.
+
+## Public API
+
+Create a key in **Settings → API keys**, then:
+
+```bash
+# Start an agent run → 202 { "run_id": "…" }
+curl -X POST https://<app>/api/v1/agents/<AGENT_ID>/runs \
+  -H "Authorization: Bearer af_…" -H "content-type: application/json" \
+  -d '{"input":"Summarize https://example.com"}'
+
+# Get status, output, usage and steps
+curl https://<app>/api/v1/runs/<RUN_ID> -H "Authorization: Bearer af_…"
+
+# Workflows
+curl -X POST https://<app>/api/v1/workflows/<WORKFLOW_ID>/runs -H "Authorization: Bearer af_…" -d '{"input":"…"}'
+curl https://<app>/api/v1/workflow-runs/<WORKFLOW_RUN_ID> -H "Authorization: Bearer af_…"
+
+# Webhook trigger: the body becomes {{input}}
+curl -X POST "https://<app>/api/hooks/<WORKFLOW_ID>?token=<WEBHOOK_TOKEN>" -d '{"event":"…"}'
+```
 
 ## Testing
+
+`npm run test:e2e:m2 [baseUrl]` tests workflows, approvals, conditions, schedules, memory, the
+knowledge base, and RLS on the new tables. With `baseUrl` (a running app) it also tests the
+webhook and API routes over HTTP.
 
 `npm run test:e2e` runs an end-to-end check against your real Supabase project (needs the four
 env vars). It creates two temporary users, then checks:
@@ -121,7 +152,18 @@ Browser ◀── Supabase Realtime (runs, run_steps, RLS-filtered) ◀───
   every redirect. A DNS-rebinding race is still theoretically possible. For stronger isolation,
   put tool traffic behind an egress proxy.
 - The Slack webhook URL is stored in `agents.tool_config` and is visible to workspace members.
-  Encrypted secrets (Supabase Vault) are planned for a later milestone.
+- Webhook tokens are compared in constant time. API keys are shown once and stored only as
+  hashes.
+
+## Known limitations
+
+- Knowledge-base search is keyword-based (Postgres full-text search), not semantic. Adding
+  embeddings (pgvector) is the natural next step.
+- Uploads accept text formats only (.txt, .md, .csv, .json). PDF parsing isn't included.
+- Without Inngest, runs execute in `after()` on the request that started them. That is limited
+  by the function's max duration, and schedules fire only once a day (Vercel Cron on the Hobby
+  plan).
+- Invites are shareable links. Emails are not sent.
 
 ## Project layout
 
