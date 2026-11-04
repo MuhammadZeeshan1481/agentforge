@@ -1,6 +1,7 @@
 import "server-only";
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { htmlToText, safeFetch } from "./safe-fetch";
 import { TOOL_CATALOG, type ToolId } from "./catalog";
 
@@ -10,7 +11,14 @@ const clip = (s: string) =>
 
 type ToolConfig = Record<string, Record<string, string> | undefined>;
 
-function buildTool(id: ToolId, config: ToolConfig) {
+export type ToolContext = {
+  db: SupabaseClient;
+  workspaceId: string;
+  agentId: string;
+  runId: string;
+};
+
+function buildTool(id: ToolId, config: ToolConfig, ctx: ToolContext) {
   switch (id) {
     case "web_fetch":
       return tool({
@@ -57,6 +65,50 @@ function buildTool(id: ToolId, config: ToolConfig) {
         },
       });
 
+    case "memory":
+      return tool({
+        description:
+          "Save an important, durable fact for future runs (user preferences, decisions, key results). Keep it short.",
+        inputSchema: z.object({ fact: z.string().min(1).max(500) }),
+        execute: async ({ fact }) => {
+          const { count } = await ctx.db
+            .from("agent_memories")
+            .select("id", { count: "exact", head: true })
+            .eq("agent_id", ctx.agentId);
+          if ((count ?? 0) >= 200) return { saved: false, error: "Memory is full (200 items)" };
+          const { error } = await ctx.db.from("agent_memories").insert({
+            agent_id: ctx.agentId,
+            workspace_id: ctx.workspaceId,
+            content: fact,
+            source_run_id: ctx.runId,
+          });
+          return error ? { saved: false, error: error.message } : { saved: true };
+        },
+      });
+
+    case "search_knowledge":
+      return tool({
+        description: TOOL_CATALOG.search_knowledge.description,
+        inputSchema: z.object({
+          query: z.string().min(1).max(300).describe("Keywords to search for"),
+        }),
+        execute: async ({ query }) => {
+          const { data, error } = await ctx.db.rpc("search_knowledge", {
+            ws: ctx.workspaceId,
+            query,
+            match_count: 5,
+          });
+          if (error) return { error: error.message };
+          if (!data?.length) return { results: [], note: "No matching documents found." };
+          return {
+            results: (data as { title: string; content: string }[]).map((r) => ({
+              document: r.title,
+              excerpt: clip(r.content),
+            })),
+          };
+        },
+      });
+
     case "current_time":
       return tool({
         description: TOOL_CATALOG.current_time.description,
@@ -79,10 +131,12 @@ function buildTool(id: ToolId, config: ToolConfig) {
   }
 }
 
-export function buildToolSet(ids: string[], config: ToolConfig): ToolSet {
+export function buildToolSet(ids: string[], config: ToolConfig, ctx: ToolContext): ToolSet {
   const set: ToolSet = {};
   for (const id of ids) {
-    if (id in TOOL_CATALOG) set[id] = buildTool(id as ToolId, config);
+    if (!(id in TOOL_CATALOG)) continue;
+    // The "memory" capability is exposed to the model as a save_memory tool.
+    set[id === "memory" ? "save_memory" : id] = buildTool(id as ToolId, config, ctx);
   }
   return set;
 }

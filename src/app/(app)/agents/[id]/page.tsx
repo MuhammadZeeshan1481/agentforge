@@ -7,6 +7,7 @@ import type { Agent } from "@/lib/types";
 import { AgentForm } from "../agent-form";
 import { deleteAgent, startRun, updateAgent } from "../actions";
 import { RunForm } from "./run-form";
+import { MemoryPanel, VersionsPanel } from "./agent-extras";
 import { DeleteButton } from "./delete-button";
 import { RUN_ROW_SELECT, RunsTable, type RunRow } from "../../runs-table";
 
@@ -15,6 +16,21 @@ async function AgentPageContent({ params }: PageProps<"/agents/[id]">) {
   const { supabase } = await getContext();
   const { data: agent } = await supabase.from("agents").select("*").eq("id", id).maybeSingle();
   if (!agent) notFound();
+
+  const [{ data: memories }, { data: versions }] = await Promise.all([
+    supabase
+      .from("agent_memories")
+      .select("id, content, created_at")
+      .eq("agent_id", id)
+      .order("created_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("agent_versions")
+      .select("id, version, created_at, snapshot")
+      .eq("agent_id", id)
+      .order("version", { ascending: false })
+      .limit(20),
+  ]);
 
   const { data: runs } = await supabase
     .from("runs")
@@ -42,6 +58,13 @@ async function AgentPageContent({ params }: PageProps<"/agents/[id]">) {
       ) : (
         <EmptyState title="This agent hasn't run yet" />
       )}
+
+      <div className="mt-8 grid gap-4 lg:grid-cols-2">
+        {(agent.tools as string[]).includes("memory") && (
+          <MemoryPanel agentId={id} memories={memories ?? []} />
+        )}
+        <VersionsPanel agentId={id} versions={(versions ?? []) as never} />
+      </div>
 
       <h2 className="mt-8 mb-3 font-semibold">Configuration</h2>
       <Card>

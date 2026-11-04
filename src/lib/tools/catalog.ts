@@ -14,6 +14,15 @@ export const TOOL_CATALOG = {
     description: "Post a message to the Slack channel configured for this agent.",
     configField: { key: "webhook_url", label: "Slack incoming webhook URL" },
   },
+  memory: {
+    label: "Long-term memory",
+    description:
+      "Lets the agent save facts with a save_memory tool. Saved memories are included in every future run of this agent.",
+  },
+  search_knowledge: {
+    label: "Knowledge base search",
+    description: "Search the documents in this workspace's knowledge base and answer from them.",
+  },
   current_time: {
     label: "Current time",
     description: "Get the current date and time, optionally in a given IANA timezone.",

@@ -18,7 +18,9 @@ function trimForLog(value: unknown): unknown {
  * Executes one queued run end-to-end and records every step in run_steps.
  * Idempotent: a run that is no longer 'queued' is skipped (safe for retries).
  */
-export async function executeRun(runId: string) {
+export type RunResult = { ok?: boolean; skipped?: boolean; error?: string; output?: string };
+
+export async function executeRun(runId: string): Promise<RunResult> {
   const db = createAdminClient();
 
   // Claim the run atomically so a retry/duplicate event can't run it twice.
@@ -69,7 +71,31 @@ export async function executeRun(runId: string) {
   await db.from("runs").update({ model: modelId }).eq("id", run.id);
   await log("info", { message: `Starting ${agent.name} on ${modelId}`, tools: agent.tools });
 
-  const tools = buildToolSet(agent.tools ?? [], agent.tool_config ?? {});
+  const tools = buildToolSet(agent.tools ?? [], agent.tool_config ?? {}, {
+    db,
+    workspaceId: run.workspace_id,
+    agentId: agent.id,
+    runId: run.id,
+  });
+
+  let memoryBlock = "";
+  if ((agent.tools ?? []).includes("memory")) {
+    const { data: memories } = await db
+      .from("agent_memories")
+      .select("content")
+      .eq("agent_id", agent.id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (memories?.length) {
+      memoryBlock = [
+        "",
+        "Things you remember from previous runs (most recent first):",
+        ...memories.map((m) => `- ${m.content}`),
+      ].join("\n");
+      await log("info", { message: `Loaded ${memories.length} memories` });
+    }
+  }
+  let finalText = "";
   let inTokens = 0;
   let outTokens = 0;
 
@@ -78,6 +104,7 @@ export async function executeRun(runId: string) {
       model: google(modelId),
       system: [
         agent.instructions || "You are a helpful assistant.",
+        memoryBlock,
         "",
         "Use the available tools when they help. When finished, reply with the final answer only.",
       ].join("\n"),
@@ -116,12 +143,13 @@ export async function executeRun(runId: string) {
         finished_at: new Date().toISOString(),
       })
       .eq("id", run.id);
+    finalText = result.text;
     await log("info", {
       message: reachedLimit ? "Stopped at step limit" : "Finished",
       steps: result.steps.length,
       usage: result.totalUsage,
     });
-    return { ok: true };
+    return { ok: true, output: finalText };
   } catch (err) {
     return fail(err instanceof Error ? err.message : String(err));
   }

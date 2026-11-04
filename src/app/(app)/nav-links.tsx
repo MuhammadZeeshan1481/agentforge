@@ -2,12 +2,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
-import { Bot, History, LayoutDashboard } from "lucide-react";
+import { BarChart3, BookOpen, Bot, History, LayoutDashboard, Settings, ShieldCheck, Workflow } from "lucide-react";
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/agents", label: "Agents", icon: Bot },
-  { href: "/runs", label: "Runs", icon: History },
+  { href: "/workflows", label: "Workflows", icon: Workflow },
+  { href: "/approvals", label: "Approvals", icon: ShieldCheck },
+  { href: "/runs", label: "Agent runs", icon: History },
+  { href: "/knowledge", label: "Knowledge", icon: BookOpen },
+  { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function NavLinks() {

@@ -10,7 +10,7 @@ export function AgentForm({
   action,
   submitLabel,
 }: {
-  agent?: Agent;
+  agent?: Partial<Agent>;
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   submitLabel: string;
 }) {

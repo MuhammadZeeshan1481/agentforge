@@ -60,6 +60,30 @@ export async function createAgent(_: FormState, formData: FormData): Promise<For
   redirect(`/agents/${data.id}`);
 }
 
+const VERSIONED_FIELDS = "name, description, instructions, model, tools, tool_config, max_steps, workspace_id";
+
+/** Store the agent's current config as a new version before it changes. */
+async function snapshotAgent(agentId: string) {
+  const { supabase, user } = await getContext();
+  const { data: current } = await supabase.from("agents").select(VERSIONED_FIELDS).eq("id", agentId).single();
+  if (!current) return;
+  const { data: last } = await supabase
+    .from("agent_versions")
+    .select("version")
+    .eq("agent_id", agentId)
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { workspace_id, ...snapshot } = current;
+  await supabase.from("agent_versions").insert({
+    agent_id: agentId,
+    workspace_id,
+    version: (last?.version ?? 0) + 1,
+    snapshot,
+    created_by: user.id,
+  });
+}
+
 export async function updateAgent(
   agentId: string,
   _: FormState,
@@ -68,6 +92,7 @@ export async function updateAgent(
   const { supabase } = await getContext();
   const parsed = parseAgent(formData);
   if ("error" in parsed) return { error: parsed.error };
+  await snapshotAgent(agentId);
 
   const { error } = await supabase
     .from("agents")
@@ -87,8 +112,8 @@ export async function deleteAgent(agentId: string) {
 }
 
 export async function startRun(agentId: string, _: FormState, formData: FormData): Promise<FormState> {
-  const { supabase, user, role } = await getContext();
-  if (!["owner", "admin", "editor"].includes(role)) return { error: "You don't have permission to run agents." };
+  const { supabase, user, canEdit } = await getContext();
+  if (!canEdit) return { error: "You don't have permission to run agents." };
 
   const input = String(formData.get("input") ?? "").slice(0, 20000);
 
@@ -111,4 +136,33 @@ export async function startRun(agentId: string, _: FormState, formData: FormData
 
   await dispatchRun(run.id);
   redirect(`/runs/${run.id}`);
+}
+
+export async function restoreAgentVersion(agentId: string, versionId: number) {
+  const { supabase } = await getContext();
+  const { data: v } = await supabase
+    .from("agent_versions")
+    .select("snapshot")
+    .eq("id", versionId)
+    .eq("agent_id", agentId)
+    .single();
+  if (!v) return;
+  await snapshotAgent(agentId);
+  await supabase
+    .from("agents")
+    .update({ ...(v.snapshot as object), updated_at: new Date().toISOString() })
+    .eq("id", agentId);
+  revalidatePath(`/agents/${agentId}`);
+}
+
+export async function deleteMemory(agentId: string, memoryId: number) {
+  const { supabase } = await getContext();
+  await supabase.from("agent_memories").delete().eq("id", memoryId).eq("agent_id", agentId);
+  revalidatePath(`/agents/${agentId}`);
+}
+
+export async function clearMemories(agentId: string) {
+  const { supabase } = await getContext();
+  await supabase.from("agent_memories").delete().eq("agent_id", agentId);
+  revalidatePath(`/agents/${agentId}`);
 }

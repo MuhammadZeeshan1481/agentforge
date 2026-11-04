@@ -2,11 +2,25 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { getContext } from "@/lib/workspace";
 import { NavLinks } from "./nav-links";
+import { switchWorkspace } from "./settings/actions";
 import { PageSkeleton } from "@/components/page-skeleton";
 
 async function WorkspaceName() {
-  const { workspace } = await getContext();
-  return <>{workspace.name}</>;
+  const { workspace, workspaces } = await getContext();
+  if (workspaces.length < 2) return <>{workspace.name}</>;
+  return (
+    <span className="flex flex-wrap gap-x-2">
+      {workspaces.map((w) =>
+        w.id === workspace.id ? (
+          <span key={w.id} className="font-medium text-zinc-700 dark:text-zinc-300">{w.name}</span>
+        ) : (
+          <form key={w.id} action={switchWorkspace.bind(null, w.id)} className="inline">
+            <button className="hover:underline" title="Switch workspace">{w.name}</button>
+          </form>
+        ),
+      )}
+    </span>
+  );
 }
 
 async function UserFooter() {
