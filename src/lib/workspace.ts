@@ -1,10 +1,13 @@
 import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 /** Current user + their (first) workspace. Redirects to /login if signed out. */
 export const getContext = cache(async () => {
+  // Per-request data: opt out of prerendering before touching auth/time.
+  await connection();
   const supabase = await createClient();
   const {
     data: { user },

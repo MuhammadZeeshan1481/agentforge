@@ -1,9 +1,11 @@
+import { Suspense } from "react";
+import { PageSkeleton } from "@/components/page-skeleton";
 import Link from "next/link";
 import { Card, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { getContext } from "@/lib/workspace";
 import { TOOL_CATALOG, type ToolId } from "@/lib/tools/catalog";
 
-export default async function AgentsPage() {
+async function AgentsPageContent() {
   const { supabase, workspace } = await getContext();
   const { data: agents } = await supabase
     .from("agents")
@@ -50,5 +52,13 @@ export default async function AgentsPage() {
         </div>
       )}
     </>
+  );
+}
+
+export default function AgentsPage() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <AgentsPageContent />
+    </Suspense>
   );
 }

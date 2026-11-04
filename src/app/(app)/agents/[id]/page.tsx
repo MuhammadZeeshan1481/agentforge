@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { notFound } from "next/navigation";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { getContext } from "@/lib/workspace";
@@ -8,7 +10,7 @@ import { RunForm } from "./run-form";
 import { DeleteButton } from "./delete-button";
 import { RUN_ROW_SELECT, RunsTable, type RunRow } from "../../runs-table";
 
-export default async function AgentPage({ params }: PageProps<"/agents/[id]">) {
+async function AgentPageContent({ params }: PageProps<"/agents/[id]">) {
   const { id } = await params;
   const { supabase } = await getContext();
   const { data: agent } = await supabase.from("agents").select("*").eq("id", id).maybeSingle();
@@ -53,3 +55,11 @@ export default async function AgentPage({ params }: PageProps<"/agents/[id]">) {
   );
 }
 
+
+export default function AgentPage(props: PageProps<"/agents/[id]">) {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <AgentPageContent {...props} />
+    </Suspense>
+  );
+}

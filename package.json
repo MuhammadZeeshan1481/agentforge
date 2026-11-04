@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:e2e": "tsx --conditions=react-server scripts/e2e-test.mts"
   },
   "dependencies": {
     "@ai-sdk/google": "^2.0.108",
@@ -30,6 +31,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.4",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

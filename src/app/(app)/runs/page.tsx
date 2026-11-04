@@ -1,8 +1,10 @@
+import { Suspense } from "react";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { getContext } from "@/lib/workspace";
 import { RUN_ROW_SELECT, RunsTable, type RunRow } from "../runs-table";
 
-export default async function RunsPage() {
+async function RunsPageContent() {
   const { supabase, workspace } = await getContext();
   const { data } = await supabase
     .from("runs")
@@ -20,5 +22,13 @@ export default async function RunsPage() {
         <EmptyState title="No runs yet" />
       )}
     </>
+  );
+}
+
+export default function RunsPage() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <RunsPageContent />
+    </Suspense>
   );
 }

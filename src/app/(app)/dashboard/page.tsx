@@ -1,8 +1,10 @@
+import { Suspense } from "react";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { Card, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { getContext } from "@/lib/workspace";
 import { RUN_ROW_SELECT, RunsTable, type RunRow } from "../runs-table";
 
-export default async function DashboardPage() {
+async function DashboardPageContent() {
   const { supabase, workspace } = await getContext();
 
   const monthStart = new Date();
@@ -78,5 +80,13 @@ export default async function DashboardPage() {
         <EmptyState title="No runs yet">Create an agent and run it to see results here.</EmptyState>
       )}
     </>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <DashboardPageContent />
+    </Suspense>
   );
 }

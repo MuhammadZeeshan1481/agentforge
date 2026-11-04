@@ -80,6 +80,18 @@ and set `INNGEST_DEV=1` in `.env.local`.
    and `INNGEST_SIGNING_KEY` and syncs `/api/inngest`.
 4. Update Supabase **Site URL / Redirect URLs** to the Vercel URL.
 
+## Testing
+
+`npm run test:e2e` runs an end-to-end check against your real Supabase project (needs the four
+env vars). It creates two temporary users, then checks:
+
+- the signup trigger creates a workspace
+- RLS isolation between workspaces
+- that users can't write runs or raise their token limit
+- that an agent run with a real tool call works through the engine
+
+It deletes the test users afterwards.
+
 ## Architecture
 
 ```

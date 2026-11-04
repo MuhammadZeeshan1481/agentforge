@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { getContext } from "@/lib/workspace";
 import { NavLinks } from "./nav-links";
+import { PageSkeleton } from "@/components/page-skeleton";
 
 async function WorkspaceName() {
   const { workspace } = await getContext();
@@ -22,14 +23,6 @@ async function UserFooter() {
   );
 }
 
-function PageSkeleton() {
-  return (
-    <div className="animate-pulse space-y-4">
-      <div className="h-8 w-48 rounded bg-zinc-200 dark:bg-zinc-800" />
-      <div className="h-32 rounded-lg bg-zinc-200 dark:bg-zinc-800" />
-    </div>
-  );
-}
 
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
@@ -48,7 +41,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
         <Suspense>
           <NavLinks />
         </Suspense>
-        <div className="hidden border-t border-zinc-200 p-4 md:block dark:border-zinc-800">
+        <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-4 py-2 md:block md:py-4 dark:border-zinc-800 [&>form]:mt-0 md:[&>form]:mt-2">
           <Suspense>
             <UserFooter />
           </Suspense>

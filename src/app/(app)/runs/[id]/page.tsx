@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { PageSkeleton } from "@/components/page-skeleton";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui";
@@ -5,7 +7,7 @@ import { getContext } from "@/lib/workspace";
 import type { Run, RunStep } from "@/lib/types";
 import { RunLive } from "./run-live";
 
-export default async function RunPage({ params }: PageProps<"/runs/[id]">) {
+async function RunPageContent({ params }: PageProps<"/runs/[id]">) {
   const { id } = await params;
   const { supabase } = await getContext();
   const { data: run } = await supabase
@@ -37,5 +39,13 @@ export default async function RunPage({ params }: PageProps<"/runs/[id]">) {
       />
       <RunLive initialRun={run as Run} initialSteps={(steps ?? []) as RunStep[]} />
     </>
+  );
+}
+
+export default function RunPage(props: PageProps<"/runs/[id]">) {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <RunPageContent {...props} />
+    </Suspense>
   );
 }
