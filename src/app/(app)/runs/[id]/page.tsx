@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui";
 import { getContext } from "@/lib/workspace";
 import type { Run, RunStep } from "@/lib/types";
 import { RunLive } from "./run-live";
+import { LocalTime } from "@/components/local-time";
 
 async function RunPageContent({ params }: PageProps<"/runs/[id]">) {
   const { id } = await params;
@@ -28,7 +29,7 @@ async function RunPageContent({ params }: PageProps<"/runs/[id]">) {
     <>
       <PageHeader
         title={`Run · ${agent?.name ?? "Agent"}`}
-        description={new Date(run.created_at).toLocaleString()}
+        description={<LocalTime iso={run.created_at} />}
         actions={
           agent && (
             <Link href={`/agents/${agent.id}`} className="text-sm text-indigo-600 hover:underline">

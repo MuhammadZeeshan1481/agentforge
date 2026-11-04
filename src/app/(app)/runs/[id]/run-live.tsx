@@ -4,6 +4,7 @@ import { clsx } from "clsx";
 import { AlertTriangle, Bot, Info, Wrench, CornerDownRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Card, StatusBadge, duration } from "@/components/ui";
+import { LocalTime } from "@/components/local-time";
 import type { Run, RunStep } from "@/lib/types";
 
 const icons = {
@@ -124,7 +125,7 @@ export function RunLive({ initialRun, initialSteps }: { initialRun: Run; initial
                     />
                     <span className="font-medium">{titles[s.kind]?.(s.content) ?? s.kind}</span>
                     <span className="ml-auto text-xs text-zinc-400">
-                      {new Date(s.created_at).toLocaleTimeString()}
+                      <LocalTime iso={s.created_at} format="time" />
                     </span>
                   </div>
                   <StepBody step={s} />

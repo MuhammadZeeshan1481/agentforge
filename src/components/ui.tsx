@@ -83,7 +83,7 @@ export function PageHeader({
   actions,
 }: {
   title: string;
-  description?: string;
+  description?: ReactNode;
   actions?: ReactNode;
 }) {
   return (
@@ -125,15 +125,6 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
       {children && <div className="mt-2 text-sm text-zinc-500">{children}</div>}
     </div>
   );
-}
-
-export function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 export function duration(start: string | null, end: string | null) {

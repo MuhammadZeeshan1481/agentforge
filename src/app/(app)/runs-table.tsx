@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { StatusBadge, duration, formatDate } from "@/components/ui";
+import { StatusBadge, duration } from "@/components/ui";
+import { LocalTime } from "@/components/local-time";
 
 export type RunRow = {
   id: string;
@@ -49,7 +50,7 @@ export function RunsTable({ runs }: { runs: RunRow[] }) {
                 {duration(r.started_at, r.finished_at)}
               </td>
               <td className="px-4 py-2.5 text-right whitespace-nowrap text-zinc-500">
-                {formatDate(r.created_at)}
+                <LocalTime iso={r.created_at} format="short" />
               </td>
             </tr>
           ))}
