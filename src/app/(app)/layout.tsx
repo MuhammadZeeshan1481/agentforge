@@ -46,11 +46,11 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
           <Link href="/dashboard" className="text-lg font-semibold">
             ⚒️ AgentForge
           </Link>
-          <p className="truncate text-xs text-zinc-500 md:mt-1">
+          <div className="truncate text-xs text-zinc-500 md:mt-1">
             <Suspense fallback="…">
               <WorkspaceName />
             </Suspense>
-          </p>
+          </div>
         </div>
         <Suspense>
           <NavLinks />
