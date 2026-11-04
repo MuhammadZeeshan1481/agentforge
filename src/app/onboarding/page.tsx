@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
 import { getContext } from "@/lib/workspace";
 import { Logo } from "@/components/app/logo";
 import { PageSkeleton } from "@/components/page-skeleton";
@@ -10,7 +9,6 @@ export const metadata: Metadata = { title: "Welcome" };
 
 async function Onboarding() {
   const { user, workspace, profile } = await getContext();
-  if (profile.onboarded) redirect("/dashboard");
   return (
     <>
       <p className="text-sm font-medium text-primary">Welcome to AgentForge 👋</p>

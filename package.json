@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "tsx --conditions=react-server scripts/e2e-test.mts",
-    "test:e2e:m2": "tsx --conditions=react-server scripts/e2e-m2.mts"
+    "test:e2e:m2": "tsx --conditions=react-server scripts/e2e-m2.mts",
+    "test:e2e:m3": "tsx --conditions=react-server scripts/e2e-m3.mts"
   },
   "dependencies": {
     "@ai-sdk/google": "^2.0.108",

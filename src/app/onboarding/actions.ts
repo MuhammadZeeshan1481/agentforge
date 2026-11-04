@@ -1,10 +1,9 @@
 "use server";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getContext } from "@/lib/workspace";
 import { getTemplate } from "@/lib/templates";
 
-export type State = { error?: string };
+export type State = { error?: string; redirectTo?: string };
 
 export async function completeOnboarding(_: State, formData: FormData): Promise<State> {
   const { supabase, user, workspace } = await getContext();
@@ -35,7 +34,7 @@ export async function completeOnboarding(_: State, formData: FormData): Promise<
       })
       .select("id")
       .single();
-    if (data) redirect(`/agents/${data.id}?welcome=1`);
+    if (data) return { redirectTo: `/agents/${data.id}?welcome=1` };
   }
-  redirect("/dashboard?welcome=1");
+  return { redirectTo: "/dashboard?welcome=1" };
 }

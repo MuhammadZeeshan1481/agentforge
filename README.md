@@ -9,18 +9,20 @@ model step and tool call stream in live.
 
 | Area | What you get |
 |---|---|
-| **Agents** | Instructions, model (Gemini), tools, step limit. 5 ready-made templates. Version history with restore. |
-| **Tools** | Web fetch, HTTP request (custom APIs), Slack post, current time, long-term memory, knowledge-base search. SSRF protection on network tools. |
-| **Runs** | Background execution. Every model step and tool call is logged and streamed live. Token usage per run, with a monthly budget per workspace. |
-| **Workflows** | Chain agent steps, human-approval steps and conditions. Pass data between steps with `{{input}}`, `{{previous}}`, `{{step1}}`… |
-| **Triggers** | Manual, webhook (secret URL), schedule (hourly, daily or weekly), public API |
-| **Human-in-the-loop** | A workflow pauses at an approval step. Reviewers approve or reject from the run page or the Approvals inbox. |
-| **Memory** | Agents save facts with `save_memory`. Saved facts are added to every later run. You can view and delete them per agent. |
-| **Knowledge base** | Paste or upload text docs. They are split into chunks and searched with Postgres full-text search. |
-| **Analytics** | Runs per day, success rate, latency and tokens, overall and per agent |
-| **Teams** | Multiple workspaces per user, invite links with roles (admin, editor, viewer), workspace switcher |
-| **API** | Workspace API keys (stored only as SHA-256 hashes) and REST endpoints for agent and workflow runs |
-| **Security** | RLS on every table. Runs, usage, memories and docs are written only by the server. Token budgets can't be changed through the API. |
+| **Agents** | Instructions, Gemini model, 13 tools, step limit. 5 templates. Version history with restore. Falls back to Flash-Lite automatically when the chosen model is overloaded. |
+| **Tools** | Web fetch, HTTP request, knowledge-base search, long-term memory, send email (Resend), Slack, Gmail send/search, Sheets read/append, Notion search/create page, current time. Network tools have SSRF protection. |
+| **Workflows** | Drag & drop builder (dnd-kit + Zustand) with agent, human-approval and condition steps. Pass data with `{{input}}`, `{{previous}}` and `{{stepN}}`. |
+| **Triggers** | Manual, webhook (secret URL), schedule (hourly, daily or weekly), REST API |
+| **Human-in-the-loop** | Workflows pause at approval steps. Editors get an email and approve or reject from the run page or the Approvals inbox. |
+| **Knowledge base (RAG)** | PDF and text uploads. Chunks are embedded with Gemini, then searched with hybrid semantic + keyword retrieval (pgvector + Postgres FTS, reciprocal-rank fusion). Includes a test-retrieval box. |
+| **Memory** | Agents save facts with `save_memory`. Saved facts are added to later runs, and you can view and delete them per agent. |
+| **Integrations** | Google and Notion via OAuth. Tokens are encrypted with AES-256-GCM, and members can never read token columns. |
+| **Observability** | Live execution traces, token usage, latency, success rates, analytics, and a monthly token budget |
+| **Auth** | Sign up with password strength check; sign in with password, magic link or Google; forgot/reset password; resend confirmation; onboarding; account page (change name, email or password, delete account) |
+| **Teams** | Multiple workspaces, a switcher, roles (owner, admin, editor, viewer), email or link invites |
+| **API** | Workspace API keys (stored as SHA-256 hashes) and REST endpoints for agent and workflow runs |
+| **Security** | RLS on every table. Runs, usage, memories, docs and tokens are written only by the server. Rate limits on runs, uploads, the API and webhooks. |
+| **UI** | Shadcn-style components on Radix, light/dark/system themes, toasts, a collapsible sidebar, a mobile drawer, skeletons and empty states |
 
 ## Stack
 
@@ -37,6 +39,10 @@ click **Run**:
 1. [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql). Run it **before**
    anyone signs up: it adds the trigger that gives every new user a workspace.
 2. [`supabase/migrations/0002_workflows_memory_knowledge.sql`](supabase/migrations/0002_workflows_memory_knowledge.sql)
+3. [`supabase/migrations/0003_semantic_integrations_profiles.sql`](supabase/migrations/0003_semantic_integrations_profiles.sql)
+
+Optional services (email, Google, Notion, Google sign-in, Gemini paid tier) are covered in
+[`docs/SETUP-INTEGRATIONS.md`](docs/SETUP-INTEGRATIONS.md).
 
 ### 2. Auth settings
 
@@ -109,6 +115,10 @@ curl -X POST "https://<app>/api/hooks/<WORKFLOW_ID>?token=<WEBHOOK_TOKEN>" -d '{
 
 ## Testing
 
+`npm run test:e2e:m3` tests profiles, semantic search (a paraphrased question that keyword
+search misses), rate limiting, AES-GCM encryption, connection-token privacy, PDF extraction and
+graceful tool failures.
+
 `npm run test:e2e:m2 [baseUrl]` tests workflows, approvals, conditions, schedules, memory, the
 knowledge base, and RLS on the new tables. With `baseUrl` (a running app) it also tests the
 webhook and API routes over HTTP.
@@ -157,13 +167,15 @@ Browser ◀── Supabase Realtime (runs, run_steps, RLS-filtered) ◀───
 
 ## Known limitations
 
-- Knowledge-base search is keyword-based (Postgres full-text search), not semantic. Adding
-  embeddings (pgvector) is the natural next step.
-- Uploads accept text formats only (.txt, .md, .csv, .json). PDF parsing isn't included.
+- Scanned PDFs (images only) contain no text, so they would need OCR.
+- Google shows an "unverified app" screen until the OAuth app passes Google's verification.
+  Test users can still connect.
+- Supabase's built-in email sends only a few messages per hour. Configure Resend SMTP
+  (see the setup guide).
 - Without Inngest, runs execute in `after()` on the request that started them. That is limited
   by the function's max duration, and schedules fire only once a day (Vercel Cron on the Hobby
   plan).
-- Invites are shareable links. Emails are not sent.
+- Payments and billing aren't included yet.
 
 ## Project layout
 

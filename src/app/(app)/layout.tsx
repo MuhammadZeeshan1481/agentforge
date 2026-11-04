@@ -9,7 +9,10 @@ import { switchWorkspace } from "./settings/actions";
 
 async function Shell({ children }: { children: React.ReactNode }) {
   const { supabase, user, workspace, workspaces, role, profile } = await getContext();
-  if (!profile.onboarded) redirect("/onboarding");
+  // Read onboarding state fresh (not from the per-request cached context): the
+  // onboarding action updates it and then redirects within the same request.
+  const { data: fresh } = await supabase.from("profiles").select("onboarded").eq("id", user.id).maybeSingle();
+  if (fresh && !fresh.onboarded) redirect("/onboarding");
   const { count } = await supabase
     .from("workflow_runs")
     .select("id", { count: "exact", head: true })

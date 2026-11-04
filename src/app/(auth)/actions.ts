@@ -50,7 +50,9 @@ export async function signIn(_: AuthState, formData: FormData): Promise<AuthStat
       needsConfirmation: error.message.toLowerCase().includes("not confirmed"),
     };
   }
-  redirect(safeNext(formData.get("next")));
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: profile } = await supabase.from("profiles").select("onboarded").eq("id", user!.id).maybeSingle();
+  redirect(profile && !profile.onboarded ? "/onboarding" : safeNext(formData.get("next")));
 }
 
 export async function signUp(_: AuthState, formData: FormData): Promise<AuthState> {
@@ -123,7 +125,7 @@ export async function requestPasswordReset(_: AuthState, formData: FormData): Pr
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data, {
     redirectTo: `${await siteOrigin()}/auth/callback?next=/reset-password`,
   });
-  if (error && error.message.toLowerCase().includes("rate")) return { error: friendly(error.message) };
+  if (error && error.message.toLowerCase().includes("rate")) return { error: friendly(error.message), email: parsed.data };
   return { message: "sent", email: parsed.data };
 }
 

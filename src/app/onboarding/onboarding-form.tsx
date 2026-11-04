@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { ArrowRight, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button, Field, Input } from "@/components/ui";
@@ -9,6 +9,10 @@ import { completeOnboarding, type State } from "./actions";
 export function OnboardingForm({ name, workspace, isOwner }: { name: string; workspace: string; isOwner: boolean }) {
   const [state, action, pending] = useActionState<State, FormData>(completeOnboarding, {});
   const [template, setTemplate] = useState<string>("web-researcher");
+  // Full navigation so the app shell is rendered fresh with the new profile.
+  useEffect(() => {
+    if (state.redirectTo) window.location.assign(state.redirectTo);
+  }, [state.redirectTo]);
   return (
     <form action={action} className="space-y-8">
       <input type="hidden" name="template" value={template} />
@@ -48,7 +52,7 @@ export function OnboardingForm({ name, workspace, isOwner }: { name: string; wor
         </div>
       </div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-      <Button type="submit" size="lg" className="w-full sm:w-auto" loading={pending}>
+      <Button type="submit" size="lg" className="w-full sm:w-auto" loading={pending || !!state.redirectTo}>
         Continue <ArrowRight />
       </Button>
     </form>

@@ -5,6 +5,7 @@ import { Bot, Brain, History, Play, Settings2 } from "lucide-react";
 import { Badge, Card, CardContent, EmptyState, PageHeader, StatCard } from "@/components/ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/misc";
 import { PageSkeleton } from "@/components/page-skeleton";
+import { UrlToast } from "@/components/app/url-toast";
 import { getContext } from "@/lib/workspace";
 import { emailEnabled } from "@/lib/email";
 import { getTemplate } from "@/lib/templates";
@@ -42,6 +43,7 @@ async function AgentPageContent({ params }: PageProps<"/agents/[id]">) {
 
   return (
     <>
+      <Suspense><UrlToast /></Suspense>
       <PageHeader
         icon={<Bot className="size-5" />}
         title={agent.name}

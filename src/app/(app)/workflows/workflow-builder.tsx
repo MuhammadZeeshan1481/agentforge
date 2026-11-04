@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useId, useState } from "react";
 import { useStore } from "zustand";
 import {
   DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, useDraggable, useDroppable, useSensor, useSensors,
@@ -54,6 +54,7 @@ function BuilderInner({ agents, trigger }: { agents: { id: string; name: string 
   const insert = useBuilder((s) => s.insert);
   const move = useBuilder((s) => s.move);
   const [dragging, setDragging] = useState<string | null>(null);
+  const dndId = useId();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -77,7 +78,7 @@ function BuilderInner({ agents, trigger }: { agents: { id: string; name: string 
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
+    <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
       <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
         <div className="space-y-2 lg:sticky lg:top-6 lg:self-start">
           <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">Steps</p>

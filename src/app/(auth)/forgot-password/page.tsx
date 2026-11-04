@@ -17,7 +17,7 @@ export default function ForgotPasswordPage() {
       <p className="mt-1.5 text-sm text-muted-foreground">Enter your email and we’ll send you a reset link.</p>
       <form action={action} className="mt-8 space-y-4" noValidate>
         <Field label="Email">
-          <Input name="email" type="email" autoComplete="email" placeholder="you@company.com" required />
+          <Input name="email" type="email" autoComplete="email" placeholder="you@company.com" defaultValue={state.email} key={state.email} required />
         </Field>
         {state.error && <ErrorBox>{state.error}</ErrorBox>}
         <Button type="submit" className="w-full" loading={pending}>Send reset link</Button>

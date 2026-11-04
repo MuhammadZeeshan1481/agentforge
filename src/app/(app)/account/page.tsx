@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, PageHeader } from "@/components/ui";
 import { Badge } from "@/components/ui/badge";
 import { getContext } from "@/lib/workspace";
@@ -6,7 +8,7 @@ import { DeleteAccountForm, EmailForm, PasswordForm, ProfileForm } from "./forms
 
 export const metadata: Metadata = { title: "Account" };
 
-export default async function AccountPage() {
+async function AccountContent() {
   const { user, profile } = await getContext();
   const providers = (user.app_metadata?.providers as string[] | undefined) ?? [user.app_metadata?.provider ?? "email"];
   return (
@@ -40,4 +42,8 @@ export default async function AccountPage() {
       </div>
     </>
   );
+}
+
+export default function AccountPage() {
+  return <Suspense fallback={<PageSkeleton />}><AccountContent /></Suspense>;
 }

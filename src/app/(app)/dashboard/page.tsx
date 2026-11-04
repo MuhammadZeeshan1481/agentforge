@@ -61,7 +61,7 @@ async function DashboardContent() {
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Agents" value={agents.count ?? 0} icon={<Bot />} hint={`${workflows.count ?? 0} workflows`} />
+        <StatCard label="Agents" value={agents.count ?? 0} icon={<Bot />} hint={`${workflows.count ?? 0} workflow${workflows.count === 1 ? "" : "s"}`} />
         <StatCard label="Runs this month" value={runs.length} icon={<Play />} hint={`${finished.length - ok} failed`} />
         <StatCard label="Success rate" value={finished.length ? `${Math.round((ok / finished.length) * 100)}%` : "—"} icon={<Gauge />} />
         <StatCard label="Tokens this month" value={tokens.toLocaleString()} icon={<Coins />} hint={`${pct}% of budget`} />

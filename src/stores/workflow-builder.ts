@@ -15,7 +15,8 @@ export type BuilderState = {
   select: (uid: string | null) => void;
 };
 
-const uid = () => Math.random().toString(36).slice(2, 10);
+let counter = 0;
+const uid = () => `n${++counter}-${Math.random().toString(36).slice(2, 8)}`;
 
 export function createBuilderStore(initial: WorkflowStep[], defaultAgentId: string) {
   const blank = (type: StepType): WorkflowStep =>
@@ -26,7 +27,8 @@ export function createBuilderStore(initial: WorkflowStep[], defaultAgentId: stri
         : { type, mode: "contains", value: "" };
 
   return createStore<BuilderState>()((set) => ({
-    steps: (initial.length ? initial : [{ type: "agent", agent_id: defaultAgentId, input: "{{input}}" } as WorkflowStep]).map((s) => ({ ...s, uid: uid() })),
+    // Initial ids are deterministic so server and client render the same markup.
+    steps: (initial.length ? initial : [{ type: "agent", agent_id: defaultAgentId, input: "{{input}}" } as WorkflowStep]).map((s, i) => ({ ...s, uid: `s${i}` })),
     selected: null,
     insert: (type, index) =>
       set((s) => {
