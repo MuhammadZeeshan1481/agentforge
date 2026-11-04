@@ -1,71 +1,57 @@
-import Link from "next/link";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { getContext } from "@/lib/workspace";
-import { NavLinks } from "./nav-links";
-import { switchWorkspace } from "./settings/actions";
+import { Sidebar } from "@/components/app/sidebar";
+import { MobileNav, UserMenu, WorkspaceSwitcher } from "@/components/app/menus";
+import { SidebarUserMenu } from "@/components/app/collapsible-user";
 import { PageSkeleton } from "@/components/page-skeleton";
+import { switchWorkspace } from "./settings/actions";
 
-async function WorkspaceName() {
-  const { workspace, workspaces } = await getContext();
-  if (workspaces.length < 2) return <>{workspace.name}</>;
+async function Shell({ children }: { children: React.ReactNode }) {
+  const { supabase, user, workspace, workspaces, role, profile } = await getContext();
+  if (!profile.onboarded) redirect("/onboarding");
+  const { count } = await supabase
+    .from("workflow_runs")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspace.id)
+    .eq("status", "waiting_approval");
+
+  const current = { id: workspace.id, name: workspace.name, role };
+  const switcher = <WorkspaceSwitcher current={current} workspaces={workspaces} onSwitch={switchWorkspace} />;
+  const email = user.email ?? "";
+
   return (
-    <span className="flex flex-wrap gap-x-2">
-      {workspaces.map((w) =>
-        w.id === workspace.id ? (
-          <span key={w.id} className="font-medium text-zinc-700 dark:text-zinc-300">{w.name}</span>
-        ) : (
-          <form key={w.id} action={switchWorkspace.bind(null, w.id)} className="inline">
-            <button className="hover:underline" title="Switch workspace">{w.name}</button>
-          </form>
-        ),
-      )}
-    </span>
+    <div className="flex min-h-screen">
+      <Sidebar
+        pendingApprovals={count ?? 0}
+        workspaceSwitcher={switcher}
+        userMenu={<SidebarUserMenu name={profile.fullName} email={email} />}
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <MobileNav pendingApprovals={count ?? 0} workspaceSwitcher={switcher} userMenu={<UserMenu name={profile.fullName} email={email} />} />
+        <main className="flex-1 px-4 py-6 sm:px-6 md:px-10 md:py-10">
+          <div className="mx-auto max-w-6xl">
+            <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
+          </div>
+        </main>
+      </div>
+    </div>
   );
 }
 
-async function UserFooter() {
-  const { user } = await getContext();
+function ShellSkeleton() {
   return (
-    <>
-      <p className="truncate text-xs text-zinc-500">{user.email}</p>
-      <form action="/auth/signout" method="post" className="mt-2">
-        <button className="text-xs font-medium text-zinc-600 hover:underline dark:text-zinc-400">
-          Sign out
-        </button>
-      </form>
-    </>
+    <div className="flex min-h-screen">
+      <div className="hidden w-64 border-r bg-sidebar md:block" />
+      <div className="flex-1 px-10 py-10"><PageSkeleton /></div>
+    </div>
   );
 }
-
 
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="border-b border-zinc-200 bg-white md:w-60 md:shrink-0 md:border-r md:border-b-0 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex items-center justify-between gap-2 p-4 md:block">
-          <Link href="/dashboard" className="text-lg font-semibold">
-            ⚒️ AgentForge
-          </Link>
-          <div className="truncate text-xs text-zinc-500 md:mt-1">
-            <Suspense fallback="…">
-              <WorkspaceName />
-            </Suspense>
-          </div>
-        </div>
-        <Suspense>
-          <NavLinks />
-        </Suspense>
-        <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-4 py-2 md:block md:py-4 dark:border-zinc-800 [&>form]:mt-0 md:[&>form]:mt-2">
-          <Suspense>
-            <UserFooter />
-          </Suspense>
-        </div>
-      </aside>
-      <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">
-        <div className="mx-auto max-w-5xl">
-          <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
-        </div>
-      </main>
-    </div>
+    <Suspense fallback={<ShellSkeleton />}>
+      <Shell>{children}</Shell>
+    </Suspense>
   );
 }

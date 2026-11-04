@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { executeRun } from "./run-agent";
+import { notifyApprovalNeeded } from "@/lib/notifications";
 import { renderTemplate, type StepOutput, type WorkflowStep } from "@/lib/workflows";
 
 type Db = ReturnType<typeof createAdminClient>;
@@ -98,6 +99,7 @@ export async function advanceWorkflowOneStep(id: string): Promise<{ done: boolea
           outputs,
         })
         .eq("id", id);
+      await notifyApprovalNeeded(id).catch(() => {});
       return { done: true };
     } else if (step.type === "condition") {
       const lastAgent = [...outputs].reverse().find((o) => o.type === "agent");

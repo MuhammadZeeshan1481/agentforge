@@ -1,10 +1,12 @@
 import type { NextRequest } from "next/server";
 import { authenticateApiKey, json } from "@/lib/api-auth";
+import { tooMany } from "@/lib/rate-limit";
 
 /** GET /api/v1/workflow-runs/:id → status, per-step outputs, final output */
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/v1/workflow-runs/[id]">) {
   const auth = await authenticateApiKey(request);
   if (!auth) return json({ error: "Invalid or missing API key" }, 401);
+  if (auth.limited) return tooMany();
   const { id } = await ctx.params;
   const { data } = await auth.db
     .from("workflow_runs")

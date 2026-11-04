@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 
 export const hashKey = (key: string) => createHash("sha256").update(key).digest("hex");
 
@@ -22,7 +23,8 @@ export async function authenticateApiKey(request: Request) {
     .maybeSingle();
   if (!data || data.revoked_at) return null;
   await db.from("api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", data.id);
-  return { workspaceId: data.workspace_id as string, db };
+  const allowed = await rateLimit(`api:${data.id}`, LIMITS.apiPerKey);
+  return { workspaceId: data.workspace_id as string, db, keyId: data.id as string, limited: !allowed };
 }
 
 export function safeEqual(a: string, b: string) {

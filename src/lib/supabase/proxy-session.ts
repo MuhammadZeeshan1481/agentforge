@@ -1,7 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/", "/login", "/auth", "/api/inngest", "/api/hooks", "/api/cron", "/api/v1", "/invite"];
+const PUBLIC_PATHS = [
+  "/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth",
+  "/api/inngest", "/api/hooks", "/api/cron", "/api/v1", "/api/integrations/callback", "/invite",
+];
+const AUTH_PAGES = ["/login", "/signup", "/forgot-password"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) =>
@@ -42,7 +46,7 @@ export async function updateSession(request: NextRequest) {
     login.searchParams.set("next", pathname);
     return NextResponse.redirect(login);
   }
-  if (user && pathname === "/login") {
+  if (user && AUTH_PAGES.includes(pathname)) {
     const dash = request.nextUrl.clone();
     dash.pathname = "/dashboard";
     dash.search = "";

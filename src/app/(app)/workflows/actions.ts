@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getContext } from "@/lib/workspace";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 import { createWorkflowRun, decideApproval } from "@/lib/engine/workflow";
 import { dispatchWorkflowRun } from "@/lib/engine/dispatch";
 import { SCHEDULE_INTERVALS } from "@/lib/workflows";
@@ -126,6 +127,7 @@ export async function rotateWebhookToken(id: string) {
 export async function startWorkflow(id: string, _: FormState, formData: FormData): Promise<FormState> {
   const { supabase, user, canEdit } = await getContext();
   if (!canEdit) return { error: "You don't have permission to run workflows." };
+  if (!(await rateLimit(`runs:${user.id}`, LIMITS.runsPerUser))) return { error: "You are starting runs too quickly. Wait a minute and try again." };
   const { data: wf } = await supabase.from("workflows").select("id").eq("id", id).maybeSingle();
   if (!wf) return { error: "Workflow not found" };
   let runId: string;

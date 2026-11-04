@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { authenticateApiKey, json } from "@/lib/api-auth";
+import { tooMany } from "@/lib/rate-limit";
 import { createWorkflowRun } from "@/lib/engine/workflow";
 import { dispatchWorkflowRun } from "@/lib/engine/dispatch";
 
@@ -11,6 +12,7 @@ const Body = z.object({ input: z.string().max(20000).default("") });
 export async function POST(request: NextRequest, ctx: RouteContext<"/api/v1/workflows/[id]/runs">) {
   const auth = await authenticateApiKey(request);
   if (!auth) return json({ error: "Invalid or missing API key" }, 401);
+  if (auth.limited) return tooMany();
   const { id } = await ctx.params;
   const parsed = Body.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return json({ error: parsed.error.issues[0].message }, 400);

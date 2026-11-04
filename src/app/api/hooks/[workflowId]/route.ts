@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createWorkflowRun } from "@/lib/engine/workflow";
 import { dispatchWorkflowRun } from "@/lib/engine/dispatch";
 import { json, safeEqual } from "@/lib/api-auth";
+import { LIMITS, rateLimit, tooMany } from "@/lib/rate-limit";
 
 export const maxDuration = 300;
 
@@ -28,6 +29,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/hooks/[
   if (wf.trigger_type !== "webhook") return json({ error: "Webhook trigger is not enabled for this workflow" }, 400);
   if (!wf.enabled) return json({ error: "Workflow is disabled" }, 400);
 
+  if (!(await rateLimit(`hook:${wf.id}`, LIMITS.webhookPerWorkflow))) return tooMany();
   const body = (await request.text()).slice(0, 20000);
   try {
     const id = await createWorkflowRun(wf.id, { input: body, trigger: "webhook" });

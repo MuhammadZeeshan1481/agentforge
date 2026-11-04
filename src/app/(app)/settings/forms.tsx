@@ -1,33 +1,61 @@
 "use client";
-import { useActionState, useState } from "react";
-import { Copy } from "lucide-react";
-import { Button, Input } from "@/components/ui";
-import { createApiKey, renameWorkspace, type FormState, type KeyState } from "./actions";
+import { useActionState, useEffect, useState, useTransition } from "react";
+import { toast } from "sonner";
+import { Copy, KeyRound, Mail, Trash2 } from "lucide-react";
+import { Button, Field, Input, NativeSelect } from "@/components/ui";
+import { ConfirmDialog } from "@/components/ui/dialog";
+import { createApiKey, createInvite, renameWorkspace, revokeApiKey, deleteInvite, removeMember, type FormState, type KeyState } from "./actions";
+
+function useToast(state: { error?: string; ok?: boolean; message?: string }, ok?: string) {
+  useEffect(() => {
+    if (state.error) toast.error(state.error);
+    else if (state.ok) toast.success(state.message ?? ok ?? "Saved");
+  }, [state, ok]);
+}
 
 export function RenameForm({ name, disabled }: { name: string; disabled: boolean }) {
   const [state, action, pending] = useActionState<FormState, FormData>(renameWorkspace, {});
+  useToast(state, "Workspace renamed");
   return (
-    <form action={action} className="flex flex-wrap items-center gap-2">
-      <Input name="name" defaultValue={name} disabled={disabled} className="max-w-xs" aria-label="Workspace name" />
-      <Button type="submit" variant="secondary" disabled={pending || disabled}>Rename</Button>
-      {state.error && <span className="text-sm text-red-600">{state.error}</span>}
-      {state.ok && <span className="text-sm text-emerald-600">Saved</span>}
+    <form action={action} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+      <Field label="Workspace name" hint={disabled ? "only the owner can rename" : undefined} className="flex-1">
+        <Input name="name" defaultValue={name} disabled={disabled} />
+      </Field>
+      <Button type="submit" variant="outline" disabled={disabled} loading={pending}>Save</Button>
+    </form>
+  );
+}
+
+export function InviteForm() {
+  const [state, action, pending] = useActionState<FormState & { message?: string }, FormData>(createInvite, {});
+  useToast(state);
+  return (
+    <form action={action} className="grid gap-3 sm:grid-cols-[1fr_160px_auto] sm:items-end">
+      <Field label="Email" hint="optional — leave empty for a shareable link"><Input name="email" type="email" placeholder="teammate@company.com" /></Field>
+      <Field label="Role">
+        <NativeSelect name="role" defaultValue="editor">
+          <option value="admin">Admin</option>
+          <option value="editor">Editor</option>
+          <option value="viewer">Viewer</option>
+        </NativeSelect>
+      </Field>
+      <Button type="submit" loading={pending}>{!pending && <Mail />} Invite</Button>
     </form>
   );
 }
 
 export function ApiKeyForm() {
   const [state, action, pending] = useActionState<KeyState, FormData>(createApiKey, {});
+  useEffect(() => { if (state.error) toast.error(state.error); }, [state]);
   return (
     <div className="space-y-3">
-      <form action={action} className="flex flex-wrap gap-2">
-        <Input name="name" placeholder="Key name, e.g. Zapier" className="max-w-xs" required aria-label="API key name" />
-        <Button type="submit" disabled={pending}>Create key</Button>
+      <form action={action} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <Field label="Key name" className="flex-1"><Input name="name" placeholder="e.g. Zapier, backend" required /></Field>
+        <Button type="submit" loading={pending}>{!pending && <KeyRound />} Create key</Button>
       </form>
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
       {state.key && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/30">
-          <p className="font-medium">Copy this key now — it won’t be shown again.</p>
+        <div className="rounded-lg border border-warning/40 bg-warning/[0.06] p-4 text-sm">
+          <p className="font-medium">Copy your new key now — you won’t see it again.</p>
           <CopyField value={state.key} />
         </div>
       )}
@@ -38,19 +66,37 @@ export function ApiKeyForm() {
 export function CopyField({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="mt-2 flex items-center gap-2">
-      <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 text-xs dark:bg-zinc-900">{value}</code>
-      <button
+    <div className="mt-2 flex items-center gap-2 rounded-md border bg-card p-1.5">
+      <code className="min-w-0 flex-1 truncate px-1.5 text-xs">{value}</code>
+      <Button
         type="button"
+        size="sm"
+        variant="ghost"
         onClick={async () => {
           await navigator.clipboard.writeText(value);
           setCopied(true);
+          toast.success("Copied to clipboard");
           setTimeout(() => setCopied(false), 1500);
         }}
-        className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600"
       >
-        <Copy className="size-3.5" /> {copied ? "Copied" : "Copy"}
-      </button>
+        <Copy /> {copied ? "Copied" : "Copy"}
+      </Button>
     </div>
   );
 }
+
+export function DangerButton({ label, title, description, onConfirm, icon = true }: { label: string; title: string; description: string; onConfirm: () => Promise<void>; icon?: boolean }) {
+  const [pending, start] = useTransition();
+  return (
+    <ConfirmDialog
+      title={title}
+      description={description}
+      destructive
+      confirmLabel={label}
+      onConfirm={() => start(() => onConfirm())}
+      trigger={<Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive" loading={pending}>{icon && !pending && <Trash2 />}{label}</Button>}
+    />
+  );
+}
+
+export const actions = { revokeApiKey, deleteInvite, removeMember };

@@ -99,9 +99,12 @@ export async function executeRun(runId: string): Promise<RunResult> {
   let inTokens = 0;
   let outTokens = 0;
 
+  const isOverloaded = (e: unknown) =>
+    /high demand|overloaded|unavailable|503|429|resource exhausted/i.test(e instanceof Error ? e.message : String(e));
+
   try {
-    const result = await generateText({
-      model: google(modelId),
+    const generate = (id: string) => generateText({
+      model: google(id),
       system: [
         agent.instructions || "You are a helpful assistant.",
         memoryBlock,
@@ -129,6 +132,19 @@ export async function executeRun(runId: string): Promise<RunResult> {
           .eq("id", run.id);
       },
     });
+
+    let usedModel = modelId;
+    let result;
+    try {
+      result = await generate(modelId);
+    } catch (e) {
+      // Graceful degradation: if the chosen model is overloaded, retry once on the default model.
+      if (modelId === DEFAULT_MODEL || !isOverloaded(e) || inTokens + outTokens > 0) throw e;
+      usedModel = DEFAULT_MODEL;
+      await log("info", { message: `${modelId} is overloaded — retrying on ${DEFAULT_MODEL}` });
+      await db.from("runs").update({ model: usedModel }).eq("id", run.id);
+      result = await generate(usedModel);
+    }
 
     const reachedLimit =
       result.steps.length >= (agent.max_steps ?? 8) && result.finishReason === "tool-calls";

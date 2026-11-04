@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getContext } from "@/lib/workspace";
+import { LIMITS, rateLimit } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { dispatchRun } from "@/lib/engine/dispatch";
 import { MODELS, TOOL_IDS } from "@/lib/tools/catalog";
@@ -114,6 +115,7 @@ export async function deleteAgent(agentId: string) {
 export async function startRun(agentId: string, _: FormState, formData: FormData): Promise<FormState> {
   const { supabase, user, canEdit } = await getContext();
   if (!canEdit) return { error: "You don't have permission to run agents." };
+  if (!(await rateLimit(`runs:${user.id}`, LIMITS.runsPerUser))) return { error: "You are starting runs too quickly. Wait a minute and try again." };
 
   const input = String(formData.get("input") ?? "").slice(0, 20000);
 

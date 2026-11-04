@@ -6,6 +6,8 @@ import { z } from "zod";
 import { getContext, WORKSPACE_COOKIE } from "@/lib/workspace";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateApiKey } from "@/lib/api-auth";
+import { emailEnabled, emailLayout, escapeHtml, sendEmail } from "@/lib/email";
+import { appOrigin } from "@/lib/origin";
 
 export type KeyState = { error?: string; key?: string };
 export type FormState = { error?: string; ok?: boolean };
@@ -24,7 +26,7 @@ export async function renameWorkspace(_: FormState, formData: FormData): Promise
 export async function switchWorkspace(workspaceId: string) {
   const { workspaces } = await getContext();
   if (!workspaces.some((w) => w.id === workspaceId)) return;
-  (await cookies()).set(WORKSPACE_COOKIE, workspaceId, { path: "/", httpOnly: true, sameSite: "lax", secure: true, maxAge: 60 * 60 * 24 * 365 });
+  (await cookies()).set(WORKSPACE_COOKIE, workspaceId, { path: "/", httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 365 });
   redirect("/dashboard");
 }
 
@@ -53,14 +55,38 @@ export async function revokeApiKey(id: string) {
   revalidatePath("/settings");
 }
 
-export async function createInvite(formData: FormData) {
-  const { workspace, user, isAdmin } = await getContext();
-  if (!isAdmin) return;
+export async function createInvite(_: FormState & { message?: string }, formData: FormData): Promise<FormState & { message?: string }> {
+  const { workspace, user, isAdmin, profile } = await getContext();
+  if (!isAdmin) return { error: "Only admins can invite people." };
   const role = z.enum(["admin", "editor", "viewer"]).catch("editor").parse(formData.get("role"));
-  await createAdminClient()
+  const emailRaw = String(formData.get("email") ?? "").trim().toLowerCase();
+  const email = emailRaw ? z.string().email().safeParse(emailRaw) : null;
+  if (email && !email.success) return { error: "Enter a valid email address" };
+
+  const db = createAdminClient();
+  const { data: invite, error } = await db
     .from("workspace_invites")
-    .insert({ workspace_id: workspace.id, role, created_by: user.id });
+    .insert({ workspace_id: workspace.id, role, created_by: user.id, email: email?.data ?? null })
+    .select("id, token")
+    .single();
+  if (error) return { error: error.message };
   revalidatePath("/settings");
+
+  if (!email) return { ok: true, message: "Invite link created" };
+  if (!emailEnabled()) return { ok: true, message: "Invite link created — email isn't configured, so share the link yourself." };
+  const url = `${await appOrigin()}/invite/${invite.token}`;
+  const sent = await sendEmail({
+    to: email.data,
+    subject: `${profile.fullName} invited you to ${workspace.name} on AgentForge`,
+    html: emailLayout({
+      title: `Join ${escapeHtml(workspace.name)} on AgentForge`,
+      body: `${escapeHtml(profile.fullName)} invited you to collaborate as <b>${role}</b>. The invite expires in 7 days.`,
+      cta: { label: "Accept invite", url },
+    }),
+  });
+  if (!sent.ok) return { ok: true, message: `Invite created, but the email failed: ${sent.error}` };
+  await db.from("workspace_invites").update({ email_sent_at: new Date().toISOString() }).eq("id", invite.id);
+  return { ok: true, message: `Invite sent to ${email.data}` };
 }
 
 export async function deleteInvite(id: string) {

@@ -1,139 +1,152 @@
-import { headers } from "next/headers";
+import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Button, Card, PageHeader, Select } from "@/components/ui";
+import { Code2, KeyRound, Settings2, Users } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/misc";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/misc";
+import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle, PageHeader } from "@/components/ui";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { LocalTime } from "@/components/local-time";
 import { getContext } from "@/lib/workspace";
-import { ApiKeyForm, CopyField, RenameForm } from "./forms";
-import { createInvite, deleteInvite, removeMember, revokeApiKey } from "./actions";
+import { appOrigin } from "@/lib/origin";
+import { initials } from "@/lib/utils";
+import { ApiKeyForm, CopyField, DangerButton, InviteForm, RenameForm } from "./forms";
+import { deleteInvite, removeMember, revokeApiKey } from "./actions";
+
+export const metadata: Metadata = { title: "Settings" };
 
 async function SettingsContent() {
   const { supabase, workspace, user, isAdmin, role } = await getContext();
   const [{ data: members }, { data: keys }, { data: invites }] = await Promise.all([
     supabase.from("workspace_members").select("user_id, email, role, created_at").eq("workspace_id", workspace.id).order("created_at"),
-    isAdmin
-      ? supabase.from("api_keys").select("id, name, prefix, created_at, last_used_at, revoked_at").eq("workspace_id", workspace.id).order("created_at", { ascending: false })
-      : Promise.resolve({ data: [] }),
-    isAdmin
-      ? supabase.from("workspace_invites").select("id, token, role, expires_at, accepted_at").eq("workspace_id", workspace.id).is("accepted_at", null).order("created_at", { ascending: false })
-      : Promise.resolve({ data: [] }),
+    isAdmin ? supabase.from("api_keys").select("id, name, prefix, created_at, last_used_at, revoked_at").eq("workspace_id", workspace.id).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
+    isAdmin ? supabase.from("workspace_invites").select("id, token, role, email, email_sent_at, expires_at").eq("workspace_id", workspace.id).is("accepted_at", null).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
   ]);
-  const h = await headers();
-  const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
+  const origin = await appOrigin();
 
   return (
     <>
-      <PageHeader title="Settings" description={`Workspace settings · your role: ${role}`} />
-      <div className="space-y-6">
-        <Card>
-          <h2 className="mb-3 font-semibold">Workspace</h2>
-          <RenameForm name={workspace.name} disabled={workspace.owner_id !== user.id} />
-          <p className="mt-3 text-sm text-zinc-500">
-            Monthly token budget: {workspace.monthly_token_limit.toLocaleString()} tokens. Change it in Supabase
-            (workspaces.monthly_token_limit) — it can’t be changed from the app, by design.
-          </p>
-        </Card>
+      <PageHeader title="Workspace settings" description={<>Manage {workspace.name} · your role: <Badge variant="secondary" className="capitalize">{role}</Badge></>} />
+      <Tabs defaultValue="general">
+        <TabsList>
+          <TabsTrigger value="general"><Settings2 className="size-3.5" /> General</TabsTrigger>
+          <TabsTrigger value="members" id="members"><Users className="size-3.5" /> Members</TabsTrigger>
+          {isAdmin && <TabsTrigger value="api"><Code2 className="size-3.5" /> API keys</TabsTrigger>}
+        </TabsList>
 
-        <Card>
-          <h2 className="mb-3 font-semibold">Members</h2>
-          <ul className="divide-y divide-zinc-100 text-sm dark:divide-zinc-800">
-            {(members ?? []).map((m) => (
-              <li key={m.user_id} className="flex items-center justify-between gap-3 py-2">
-                <span>
-                  {m.email ?? m.user_id}
-                  {m.user_id === user.id && <span className="ml-1 text-zinc-500">(you)</span>}
-                </span>
-                <span className="flex items-center gap-3">
-                  <span className="text-xs text-zinc-500">{m.role}</span>
-                  {isAdmin && m.role !== "owner" && m.user_id !== user.id && (
-                    <form action={removeMember.bind(null, m.user_id)}>
-                      <button className="text-xs text-zinc-500 hover:text-red-600">Remove</button>
-                    </form>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-
-          {isAdmin && (
-            <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
-              <p className="mb-2 text-sm font-medium">Invite someone</p>
-              <form action={createInvite} className="flex flex-wrap gap-2">
-                <Select name="role" defaultValue="editor" className="max-w-40" aria-label="Role">
-                  <option value="admin">Admin</option>
-                  <option value="editor">Editor</option>
-                  <option value="viewer">Viewer</option>
-                </Select>
-                <Button type="submit" variant="secondary">Create invite link</Button>
-              </form>
-              {(invites ?? []).length > 0 && (
-                <ul className="mt-3 space-y-3 text-sm">
-                  {(invites ?? []).map((inv) => (
-                    <li key={inv.id} className="rounded-md bg-zinc-50 p-3 dark:bg-zinc-950">
-                      <div className="flex items-center justify-between text-xs text-zinc-500">
-                        <span>{inv.role} · expires <LocalTime iso={inv.expires_at} format="short" /></span>
-                        <form action={deleteInvite.bind(null, inv.id)}>
-                          <button className="hover:text-red-600">Delete</button>
-                        </form>
-                      </div>
-                      <CopyField value={`${origin}/invite/${inv.token}`} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </Card>
-
-        {isAdmin && (
+        <TabsContent value="general" className="space-y-6">
           <Card>
-            <h2 className="mb-1 font-semibold">API keys</h2>
-            <p className="mb-3 text-sm text-zinc-500">Run agents and workflows from your own code.</p>
-            <ApiKeyForm />
-            {(keys ?? []).length > 0 && (
-              <ul className="mt-4 divide-y divide-zinc-100 text-sm dark:divide-zinc-800">
-                {(keys ?? []).map((k) => (
-                  <li key={k.id} className="flex items-center justify-between gap-3 py-2">
-                    <span>
-                      <span className="font-medium">{k.name}</span>
-                      <code className="ml-2 text-xs text-zinc-500">{k.prefix}…</code>
-                    </span>
-                    <span className="flex items-center gap-3 text-xs text-zinc-500">
-                      {k.revoked_at ? (
-                        <span className="text-red-600">revoked</span>
-                      ) : (
-                        <>
-                          <span>{k.last_used_at ? <>used <LocalTime iso={k.last_used_at} format="short" /></> : "never used"}</span>
-                          <form action={revokeApiKey.bind(null, k.id)}>
-                            <button className="hover:text-red-600">Revoke</button>
-                          </form>
-                        </>
-                      )}
-                    </span>
+            <CardHeader><CardTitle>General</CardTitle></CardHeader>
+            <CardContent><RenameForm name={workspace.name} disabled={workspace.owner_id !== user.id} /></CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Usage limits</CardTitle><CardDescription>Protects you from runaway costs.</CardDescription></CardHeader>
+            <CardContent className="grid gap-4 text-sm sm:grid-cols-3">
+              <div><p className="text-muted-foreground">Monthly token budget</p><p className="mt-1 text-lg font-semibold tabular-nums">{workspace.monthly_token_limit.toLocaleString()}</p></div>
+              <div><p className="text-muted-foreground">Runs per user</p><p className="mt-1 text-lg font-semibold">30 / minute</p></div>
+              <div><p className="text-muted-foreground">API & webhooks</p><p className="mt-1 text-lg font-semibold">120 · 60 / minute</p></div>
+              <p className="text-xs text-muted-foreground sm:col-span-3">The token budget can only be changed in the database (<code>workspaces.monthly_token_limit</code>) — by design, not from the app.</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="members" className="space-y-6">
+          {isAdmin && (
+            <Card>
+              <CardHeader><CardTitle>Invite teammates</CardTitle><CardDescription>Invites expire after 7 days and can be used once.</CardDescription></CardHeader>
+              <CardContent className="space-y-4">
+                <InviteForm />
+                {(invites ?? []).length > 0 && (
+                  <ul className="space-y-3">
+                    {(invites ?? []).map((inv) => (
+                      <li key={inv.id} className="rounded-lg border bg-muted/30 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                          <span className="flex items-center gap-2">
+                            <span className="font-medium">{inv.email ?? "Shareable link"}</span>
+                            <Badge variant="outline" className="capitalize">{inv.role}</Badge>
+                            {inv.email_sent_at && <Badge variant="success">emailed</Badge>}
+                          </span>
+                          <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                            expires <LocalTime iso={inv.expires_at} format="short" />
+                            <DangerButton label="Revoke" title="Revoke invite?" description="The link will stop working." onConfirm={deleteInvite.bind(null, inv.id)} icon={false} />
+                          </span>
+                        </div>
+                        <CopyField value={`${origin}/invite/${inv.token}`} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          <Card>
+            <CardHeader><CardTitle>Members ({members?.length ?? 0})</CardTitle></CardHeader>
+            <CardContent className="pt-2">
+              <ul className="divide-y">
+                {(members ?? []).map((m) => (
+                  <li key={m.user_id} className="flex items-center gap-3 py-3">
+                    <Avatar><AvatarFallback>{initials(m.email ?? "?")}</AvatarFallback></Avatar>
+                    <span className="min-w-0 flex-1 truncate text-sm">{m.email ?? m.user_id}{m.user_id === user.id && <span className="ml-1 text-muted-foreground">(you)</span>}</span>
+                    <Badge variant={m.role === "owner" ? "default" : "secondary"} className="capitalize">{m.role}</Badge>
+                    {isAdmin && m.role !== "owner" && m.user_id !== user.id && (
+                      <DangerButton label="Remove" title="Remove member?" description={`${m.email} will lose access to this workspace.`} onConfirm={removeMember.bind(null, m.user_id)} icon={false} />
+                    )}
                   </li>
                 ))}
               </ul>
-            )}
-            <pre className="mt-4 overflow-x-auto rounded bg-zinc-50 p-3 text-xs dark:bg-zinc-950">{`# Start an agent run
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="api" className="space-y-6">
+            <Card>
+              <CardHeader><CardTitle>API keys</CardTitle><CardDescription>Run agents and workflows from your own code. Keys are stored as SHA-256 hashes.</CardDescription></CardHeader>
+              <CardContent className="space-y-4">
+                <ApiKeyForm />
+                {(keys ?? []).length > 0 && (
+                  <ul className="divide-y rounded-lg border">
+                    {(keys ?? []).map((k) => (
+                      <li key={k.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+                        <KeyRound className="size-4 text-muted-foreground" />
+                        <span className="font-medium">{k.name}</span>
+                        <code className="text-xs text-muted-foreground">{k.prefix}…</code>
+                        <span className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+                          {k.revoked_at ? <Badge variant="destructive">revoked</Badge> : (
+                            <>
+                              <span>{k.last_used_at ? <>used <LocalTime iso={k.last_used_at} format="short" /></> : "never used"}</span>
+                              <DangerButton label="Revoke" title="Revoke API key?" description="Requests using this key will fail immediately." onConfirm={revokeApiKey.bind(null, k.id)} icon={false} />
+                            </>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle>Quick start</CardTitle></CardHeader>
+              <CardContent>
+                <pre className="overflow-x-auto rounded-lg border bg-muted/40 p-4 font-mono text-xs leading-relaxed">{`# Start an agent run → 202 { "run_id": "…" }
 curl -X POST ${origin}/api/v1/agents/<AGENT_ID>/runs \\
   -H "Authorization: Bearer af_..." -H "content-type: application/json" \\
   -d '{"input":"Summarize https://example.com"}'
 
-# Poll the result
+# Poll status, output, usage and steps
 curl ${origin}/api/v1/runs/<RUN_ID> -H "Authorization: Bearer af_..."
 
-# Workflows: POST /api/v1/workflows/<ID>/runs, GET /api/v1/workflow-runs/<ID>`}</pre>
-          </Card>
+# Workflows
+POST ${origin}/api/v1/workflows/<WORKFLOW_ID>/runs
+GET  ${origin}/api/v1/workflow-runs/<WORKFLOW_RUN_ID>`}</pre>
+              </CardContent>
+            </Card>
+          </TabsContent>
         )}
-      </div>
+      </Tabs>
     </>
   );
 }
 
 export default function SettingsPage() {
-  return (
-    <Suspense fallback={<PageSkeleton />}>
-      <SettingsContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<PageSkeleton />}><SettingsContent /></Suspense>;
 }

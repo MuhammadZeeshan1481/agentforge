@@ -23,11 +23,14 @@ export const getContext = cache(async () => {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data } = await supabase
+  const [{ data }, { data: profile }] = await Promise.all([
+    supabase
     .from("workspace_members")
     .select("role, workspaces(id, name, monthly_token_limit, owner_id)")
     .eq("user_id", user.id)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true }),
+    supabase.from("profiles").select("full_name, onboarded").eq("id", user.id).maybeSingle(),
+  ]);
 
   const memberships = ((data ?? []) as unknown as Membership[]).filter((m) => m.workspaces);
   if (!memberships.length) {
@@ -45,6 +48,10 @@ export const getContext = cache(async () => {
     role: current.role,
     canEdit: ["owner", "admin", "editor"].includes(current.role),
     isAdmin: ["owner", "admin"].includes(current.role),
+    profile: {
+      fullName: (profile?.full_name as string | undefined) || user.email?.split("@")[0] || "",
+      onboarded: profile ? Boolean(profile.onboarded) : true,
+    },
     workspaces: memberships.map((m) => ({ id: m.workspaces.id, name: m.workspaces.name, role: m.role })),
   };
 });

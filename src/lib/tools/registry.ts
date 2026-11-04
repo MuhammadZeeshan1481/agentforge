@@ -4,6 +4,9 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { htmlToText, safeFetch } from "./safe-fetch";
 import { TOOL_CATALOG, type ToolId } from "./catalog";
+import { embedQuery, toVector } from "@/lib/embeddings";
+import { emailLayout, escapeHtml, sendEmail } from "@/lib/email";
+import { integrationTools } from "@/lib/integrations/tools";
 
 const MAX_TOOL_OUTPUT = 12_000;
 const clip = (s: string) =>
@@ -20,6 +23,8 @@ export type ToolContext = {
 
 function buildTool(id: ToolId, config: ToolConfig, ctx: ToolContext) {
   switch (id) {
+    default:
+      throw new Error(`Unknown tool ${id}`);
     case "web_fetch":
       return tool({
         description: TOOL_CATALOG.web_fetch.description,
@@ -90,22 +95,45 @@ function buildTool(id: ToolId, config: ToolConfig, ctx: ToolContext) {
       return tool({
         description: TOOL_CATALOG.search_knowledge.description,
         inputSchema: z.object({
-          query: z.string().min(1).max(300).describe("Keywords to search for"),
+          query: z.string().min(1).max(300).describe("A natural-language question or keywords"),
         }),
         execute: async ({ query }) => {
-          const { data, error } = await ctx.db.rpc("search_knowledge", {
-            ws: ctx.workspaceId,
-            query,
-            match_count: 5,
-          });
-          if (error) return { error: error.message };
-          if (!data?.length) return { results: [], note: "No matching documents found." };
-          return {
-            results: (data as { title: string; content: string }[]).map((r) => ({
-              document: r.title,
-              excerpt: clip(r.content),
-            })),
-          };
+          // Hybrid (vector + keyword); fall back to keyword-only if embeddings are unavailable.
+          let rows: { title: string; content: string }[] | null = null;
+          try {
+            const embedding = await embedQuery(query);
+            const { data, error } = await ctx.db.rpc("search_knowledge_hybrid", {
+              ws: ctx.workspaceId,
+              query,
+              query_embedding: toVector(embedding),
+              match_count: 5,
+            });
+            if (!error) rows = data;
+          } catch {
+            rows = null;
+          }
+          if (!rows) {
+            const { data, error } = await ctx.db.rpc("search_knowledge", { ws: ctx.workspaceId, query, match_count: 5 });
+            if (error) return { error: error.message };
+            rows = data;
+          }
+          if (!rows?.length) return { results: [], note: "No matching documents found." };
+          return { results: rows.map((r) => ({ document: r.title, excerpt: clip(r.content) })) };
+        },
+      });
+
+    case "send_email":
+      return tool({
+        description: "Send an email (plain text body). Only send when the instructions clearly ask for it.",
+        inputSchema: z.object({
+          to: z.string().email(),
+          subject: z.string().min(1).max(200),
+          body: z.string().min(1).max(20000),
+        }),
+        execute: async ({ to, subject, body }) => {
+          const html = emailLayout({ title: subject, body: escapeHtml(body).replace(/\n/g, "<br/>") });
+          const r = await sendEmail({ to, subject, html, text: body });
+          return r.ok ? { sent: true, id: r.id } : { sent: false, error: r.error };
         },
       });
 
@@ -131,10 +159,17 @@ function buildTool(id: ToolId, config: ToolConfig, ctx: ToolContext) {
   }
 }
 
+const INTEGRATION_TOOLS = new Set(["gmail_send", "gmail_search", "sheets_read", "sheets_append", "notion_search", "notion_create_page"]);
+
 export function buildToolSet(ids: string[], config: ToolConfig, ctx: ToolContext): ToolSet {
   const set: ToolSet = {};
+  const integrations = ids.some((id) => INTEGRATION_TOOLS.has(id)) ? integrationTools(ctx.workspaceId) : null;
   for (const id of ids) {
     if (!(id in TOOL_CATALOG)) continue;
+    if (INTEGRATION_TOOLS.has(id)) {
+      set[id] = integrations![id as keyof typeof integrations];
+      continue;
+    }
     // The "memory" capability is exposed to the model as a save_memory tool.
     set[id === "memory" ? "save_memory" : id] = buildTool(id as ToolId, config, ctx);
   }
